@@ -1,7 +1,5 @@
 use packet_codegen::Packet;
 
-fn main() {}
-
 #[derive(Packet)]
 #[packet(world_opcode = 100)]
 #[packet(login_opcode = 12)]

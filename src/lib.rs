@@ -1,3 +1,5 @@
+mod income;
+
 use byteorder::{BigEndian, LittleEndian, ReadBytesExt, WriteBytesExt};
 use std::io::{BufRead, Error, ErrorKind, Read, Write};
 

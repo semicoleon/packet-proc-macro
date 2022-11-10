@@ -12,6 +12,7 @@ use syn::{
 pub fn derive(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
 
+    // Parse syn's input type into what we actually expect
     let input = match Input::parse(&input) {
         Ok(input) => input,
         Err(e) => return e.into_compile_error().into(),
@@ -19,12 +20,14 @@ pub fn derive(input: TokenStream) -> TokenStream {
 
     let ident = &input.name;
 
+    // If we have a login opcode, we need to set omit_bytes to a different value.
     let omit_bytes_extra = if let Some(login_opcode) = input.login_opcode {
         // "as u8" doesn't seem to make sense here, are you sure you wanted that?
         quote! {
             omit_bytes = (#login_opcode as u8).to_le_bytes().len();
         }
     } else {
+        // Use an empty token stream since we don't need to do anything in this case
         Default::default()
     };
 
@@ -36,6 +39,7 @@ pub fn derive(input: TokenStream) -> TokenStream {
             }
         }
     } else {
+        // Use an empty token stream since we don't need to do anything in this case
         Default::default()
     };
 
@@ -46,7 +50,9 @@ pub fn derive(input: TokenStream) -> TokenStream {
                 #![allow(unused_mut)]
                 #![allow(unused_variables)]
                 #![allow(unused_assignments)]
-                let mut omit_bytes: usize = ::packet::INCOMING_HEADER_LENGTH;
+
+                // Using the crate module here for simplicity, in a macro you wanted other people to use that would probably not be the correct choice though
+                let mut omit_bytes: usize = crate::INCOMING_HEADER_LENGTH;
 
                 #omit_bytes_extra
 
@@ -79,22 +85,33 @@ pub fn derive(input: TokenStream) -> TokenStream {
     .into()
 }
 
+/// Parsed data about the struct we are deriving for.
 struct Input {
+    /// The name of the struct
     name: Ident,
+    /// The login opcode expression, if one was given
     login_opcode: Option<Expr>,
+    /// The world opcode expression, if one was given
     world_opcode: Option<Expr>,
+    /// The compressed opcode expression, if one was given
+    ///
+    /// This was changed from the `compressed_if` input in the original macro since it seemed to be required to be an opcode.
     compressed_opcode: Option<Expr>,
+    /// The fields of the struct.
     fields: Vec<Field>,
 }
 
 impl Input {
     fn parse(input: &DeriveInput) -> syn::Result<Self> {
+        // An ident to compare attribute paths against.
         let packet = Ident::new("packet", Span::call_site());
 
+        // The item level attribute settings we know about.
         let mut login_opcode = None::<Expr>;
         let mut world_opcode = None::<Expr>;
         let mut compressed_opcode = None::<Expr>;
         for a in &input.attrs {
+            // If it's one of our attributes, attempt to parse the arguments.
             if !a.path.is_ident(&packet) {
                 continue;
             }
@@ -163,33 +180,34 @@ impl Input {
             }
         };
 
-        let fields =
-            data.named
-                .iter()
-                .map(|f| {
-                    let ident = f.ident.clone().ok_or_else(|| {
-                        syn::Error::new_spanned(f, "Fields must have an identifier")
-                    })?;
+        let fields = data
+            .named
+            .iter()
+            .map(|f| {
+                let ident = f.ident.clone().ok_or_else(|| {
+                    // We aren't supporting tuple structs so we should always have a name.
+                    syn::Error::new_spanned(f, "Fields must have an identifier")
+                })?;
 
-                    let attributes = f
-                        .attrs
-                        .iter()
-                        .filter_map(|a| {
-                            if a.path.is_ident(&packet) {
-                                Some(a.parse_args_with(FieldAttr::parse_args))
-                            } else {
-                                None
-                            }
-                        })
-                        .collect::<Result<Vec<_>, _>>()?;
-
-                    Ok::<_, syn::Error>(Field {
-                        name: ident,
-                        ty: f.ty.clone(),
-                        attributes,
+                let attributes = f
+                    .attrs
+                    .iter()
+                    .filter_map(|a| {
+                        if a.path.is_ident(&packet) {
+                            Some(a.parse_args_with(FieldAttr::parse_args))
+                        } else {
+                            None
+                        }
                     })
+                    .collect::<Result<Vec<_>, _>>()?;
+
+                Ok::<_, syn::Error>(Field {
+                    name: ident,
+                    ty: f.ty.clone(),
+                    attributes,
                 })
-                .collect::<Result<Vec<_>, _>>()?;
+            })
+            .collect::<Result<Vec<_>, _>>()?;
 
         Ok(Self {
             name: input.ident.clone(),
@@ -232,6 +250,7 @@ impl ItemAttr {
     }
 }
 
+/// A field in the struct, along with any attributes.
 struct Field {
     name: Ident,
     ty: Type,
