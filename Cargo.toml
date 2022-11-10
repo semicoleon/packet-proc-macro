@@ -1,0 +1,19 @@
+[package]
+name = "packet"
+version = "0.1.0"
+edition = "2021"
+
+[workspace]
+members = ["packet-codegen", "."]
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+packet-codegen = { path = "packet-codegen" }
+byteorder.workspace = true
+flate2 = "1.0.24"
+
+[workspace.dependencies]
+byteorder = "1.4.3"
+proc-macro2 = "1.0.47"
+quote = "1.0.21"
+syn = { version = "1.0.103", features = ["full"] }
